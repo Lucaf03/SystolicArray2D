@@ -3,10 +3,12 @@ module pe #(
 ) (
   input  logic              clk_i, 
   input  logic              rst_i,
+  input  logic              load_weight_i,
   input  logic [Width-1:0]  data_i,
   input  logic [Width-1:0]  weight_i,
-  input  logic [Width-1:0]  prevout_i,
+  input  logic [31:0]       prevout_i,
   output logic [31:0]       result_o,
+  output logic [Width-1:0]  weight_o,
   output logic [Width-1:0]  data_o
 );
 
@@ -17,6 +19,7 @@ logic [31:0]           y_int;
 
 assign result_o = y_q;
 assign data_o = x_q;
+assign weight_o = weight_q;
 
 //Output register y
 always_ff @(posedge clk_i or posedge rst_i) begin 
@@ -35,17 +38,20 @@ always_ff @(posedge clk_i or posedge rst_i) begin
     x_q <= data_i;
 end
 
+    
+
 
 //Weight-Stationary Register
 always_ff @(posedge clk_i or posedge rst_i) begin
   if (rst_i == 1'b1) begin 
     weight_q <= 8'h00;
-  end else 
+  end else if (load_weight_i == 1'b1) begin
     weight_q <= weight_i;
+  end
 end
 
 //Result generation: y = prev_y + x*w
 always_comb begin 
-  y_int = 32'(prevout_i) + 32'(data_i) * 32'(weight_i);
+  y_int = 32'(prevout_i) + 32'(data_i) * 32'(weight_q);
 end 
 endmodule
