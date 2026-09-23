@@ -215,10 +215,6 @@ In a matrix multiplication $C = A \times B$, entry $C_{i, c} = \sum_{k=0}^{N-1} 
 
 Due to the horizontal skew network and the 1-cycle pipeline delay per PE in both horizontal and vertical directions, data moves across the array in diagonal waves.
 
-The exact clock cycle $T_{\text{valid}}$ at which element $C_{i, c}$ (row $i$ of matrix $A$, column $c$ of matrix $B$) emerges at output port `result_o[c]` is given by:
-
-$$T_{\text{valid}}(i, c) = \text{Matrix\_N} + i + c = 4 + i + c \quad [\text{cycles after streaming begins}]$$
-
 #### Output Wavefront Timing Table ($4 \times 4$)
 | Clock Cycle ($T$) | `result_o[0]` | `result_o[1]` | `result_o[2]` | `result_o[3]` |
 | :---: | :---: | :---: | :---: | :---: |
