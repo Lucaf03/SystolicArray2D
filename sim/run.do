@@ -3,7 +3,7 @@ quit -sim
 vlib work
 
 # Compilazione del modulo e del testbench
-vlog pe.sv tb_pe.sv
+vlog ../RTL/pe.sv tb_pe.sv
 
 # Avvio simulazione con risoluzione in ps e visibilità sui segnali interni
 vsim -t 1ps -voptargs="+acc" work.tb_pe

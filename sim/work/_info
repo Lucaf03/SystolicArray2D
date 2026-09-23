@@ -3,6 +3,7 @@ K4
 z2
 Z0 !s99 nomlopt
 R0
+R0
 !s11f MIXED_VERSIONS
 13
 !s112 1.1
@@ -12,60 +13,72 @@ R0
 cModel Technology
 Z1 d/home/luca/Progetti/systolic/RTL
 T_opt
-Z2 !s110 1786475226
+!s110 1786475226
 VQA>^TFbJ]DZQ]ZERIF>Y^2
-04 5 4 work tb_pe fast 0
+Z2 04 5 4 work tb_pe fast 0
 =1-000ae431a4f1-6a7b72da-8ae4a-6be40
-!s124 OEM100
-o-quiet -auto_acc_if_foreign -work work +acc
-Z3 tCvgOpt 0
+Z3 !s124 OEM100
+Z4 o-quiet -auto_acc_if_foreign -work work +acc
+Z5 tCvgOpt 0
 n@_opt
-OL;O;2021.2_1;73
-vpe
-Z4 DXx6 sv_std 3 std 0 22 9oUSJO;AeEaW`l:M@^WG92
+Z6 OL;O;2021.2_1;73
+R1
+T_opt1
+!s110 1790151449
+VOSCz_EzDJ_f4n[16>YloT3
 R2
+=1-000ae431a4f1-6ab38b19-49e6e-333c
+R3
+R4
+R5
+n@_opt1
+R6
+R1
+vpe
+Z7 DXx6 sv_std 3 std 0 22 9oUSJO;AeEaW`l:M@^WG92
+Z8 !s110 1790151507
 !i10b 1
 !s100 Z;>WS`4JEUTNo7ehaYQfQ2
-IZ8ZO^fN[=mE8mK]GWThhj0
+IOoLi>Q6`gDGc5aH_Vc71Q2
 S1
-R1
-w1786475200
-8pe.sv
-Fpe.sv
-!i122 5
+Z9 d/home/luca/SystolicArray2D/sim
+Z10 w1788988561
+8../RTL/pe.sv
+F../RTL/pe.sv
+!i122 8
 L0 1 51
-Z5 VDg1SIo80bB@j0V0VzS_@n1
-Z6 OL;L;2021.2_1;73
+Z11 VDg1SIo80bB@j0V0VzS_@n1
+Z12 OL;L;2021.2_1;73
 r1
 !s85 0
 31
-Z7 !s108 1786475226.000000
-Z8 !s107 tb_pe.sv|pe.sv|
-Z9 !s90 -reportprogress|300|pe.sv|tb_pe.sv|
+Z13 !s108 1790151507.000000
+!s107 tb_pe.sv|../RTL/pe.sv|
+Z14 !s90 ../RTL/pe.sv|tb_pe.sv|
 !i113 0
-Z10 o-L mtiAvm -L mtiRnm -L mtiOvm -L mtiUvm -L mtiUPF -L infact
-R3
+Z15 o-L mtiAvm -L mtiRnm -L mtiOvm -L mtiUvm -L mtiUPF -L infact
+R5
 vtb_pe
-R4
-R2
+R7
+R8
 !i10b 1
 !s100 >YfR?<mT0PLaoO2WjzI3T1
 I6LMlEk>GR=z?THnVGXbK?2
 S1
-R1
-w1786474749
+R9
+R10
 8tb_pe.sv
 Ftb_pe.sv
-!i122 5
+!i122 8
 L0 3 104
-R5
-R6
+R11
+R12
 r1
 !s85 0
 31
-R7
-R8
-R9
+R13
+Z16 !s107 tb_pe.sv|../RTL/pe.sv|
+R14
 !i113 0
-R10
-R3
+R15
+R5
