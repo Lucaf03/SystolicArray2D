@@ -1,13 +1,14 @@
 module pe #(
-  parameter int Width = 8
+  parameter int Width = 8,
+  parameter int AccWidth = 32
 ) (
-  input  logic              clk_i, 
-  input  logic              rst_i,
-  input  logic [Width-1:0]  data_i,
-  input  logic [Width-1:0]  weight_i,
-  input  logic [Width-1:0]  prevout_i,
-  output logic [31:0]       result_o,
-  output logic [Width-1:0]  data_o
+  input  logic                 clk_i, 
+  input  logic                 rst_i,
+  input  logic [Width-1:0]     data_i,
+  input  logic [Width-1:0]     weight_i,
+  input  logic [AccWidth-1:0]  prevout_i,
+  output logic [AccWidth-1:0]  result_o,
+  output logic [Width-1:0]     data_o
 );
 
 logic [Width-1:0]      weight_q;
@@ -46,6 +47,6 @@ end
 
 //Result generation: y = prev_y + x*w
 always_comb begin 
-  y_int = 32'(prevout_i) + 32'(data_i) * 32'(weight_i);
+  y_int = prevout_i + AccWidth'(data_i) * AccWidth'(weight_q);
 end 
 endmodule

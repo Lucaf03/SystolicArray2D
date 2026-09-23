@@ -1,0 +1,13 @@
+.venv/
+sim/work/
+sim/transcript
+sim/vsim.wlf
+sim/__pycache__/
+sim/*.ini
+sim_py/__pycache__/
+sim_py/sim_build/
+sim_py/*.vcd
+sim_py/*.wlf
+sim_py/transcript
+sim_py/results.xml
+sim_py/*.ini
