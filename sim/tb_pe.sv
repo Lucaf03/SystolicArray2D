@@ -2,22 +2,32 @@
 
 module tb_pe;
 
-  // Parametri di testbench
-  localparam int Width = 8;
+  // ---------------------------------------------------------------------------
+  // Testbench Parameters
+  // ---------------------------------------------------------------------------
+  localparam int  Width      = 8;
+  localparam int  AccWidth   = 32;
   localparam time CLK_PERIOD = 10ns;
 
-  // Segnali di interfaccia DUT
-  logic             clk_i;
-  logic             rst_i;
-  logic [Width-1:0] data_i;
-  logic [Width-1:0] weight_i;
-  logic [Width-1:0] prevout_i;
-  logic [31:0]      result_o;
-  logic [Width-1:0] data_o;
+  // ---------------------------------------------------------------------------
+  // DUT Interface Signals
+  // ---------------------------------------------------------------------------
+  logic                clk_i;
+  logic                rst_i;
+  logic [Width-1:0]    data_i;
+  logic [Width-1:0]    weight_i;
+  logic [AccWidth-1:0] prevout_i;
+  logic [AccWidth-1:0] result_o;
+  logic [Width-1:0]    data_o;
 
-  // Istanziazione del DUT (Device Under Test)
+  int total_errors = 0;
+
+  // ---------------------------------------------------------------------------
+  // DUT (Device Under Test) Instantiation
+  // ---------------------------------------------------------------------------
   pe #(
-    .Width(Width)
+    .Width   (Width),
+    .AccWidth(AccWidth)
   ) dut (
     .clk_i    (clk_i),
     .rst_i    (rst_i),
@@ -28,79 +38,94 @@ module tb_pe;
     .data_o   (data_o)
   );
 
-  // Generazione del Clock (50 MHz)
+  // ---------------------------------------------------------------------------
+  // Clock Generation (50 MHz, Period 10 ns)
+  // ---------------------------------------------------------------------------
   always #(CLK_PERIOD / 2) clk_i = ~clk_i;
 
-  // Sequenza di test
+  // ---------------------------------------------------------------------------
+  // Task: Drive Stimuli and Check Outputs
+  // ---------------------------------------------------------------------------
+  task automatic drive_and_check(
+    input logic [Width-1:0]    d,
+    input logic [Width-1:0]    w,
+    input logic [AccWidth-1:0] p
+  );
+    logic [AccWidth-1:0] expected_result;
+
+    // In a weight-stationary architecture, load weight into the PE register first
+    weight_i <= w;
+    @(posedge clk_i);
+
+    // Drive data input and partial sum input
+    data_i    <= d;
+    prevout_i <= p;
+    @(posedge clk_i);
+    #1ps; // Delta delay for stable output sampling
+
+    // Golden MAC result: y = prev_y + x * w
+    expected_result = (AccWidth'(d) * AccWidth'(w)) + p;
+
+    $display("[TIME %0t] IN: data=%0d, weight=%0d, prevout=%0d | OUT: result=%0d (EXP: %0d), data_o=%0d",
+             $time, d, w, p, result_o, expected_result, data_o);
+
+    // Verify MAC accumulation result
+    if (result_o !== expected_result) begin
+      $error("[MAC ERROR] Incorrect result! Got: %0d, Expected: %0d", result_o, expected_result);
+      total_errors++;
+    end
+
+    // Verify horizontal data passthrough
+    if (data_o !== d) begin
+      $error("[PASSTHROUGH ERROR] Incorrect data_o! Got: %0d, Expected: %0d", data_o, d);
+      total_errors++;
+    end
+  endtask
+
+  // ---------------------------------------------------------------------------
+  // Test Sequence
+  // ---------------------------------------------------------------------------
   initial begin
-    // Inizializzazione segnali
+    // Signal initialization
     clk_i     = 0;
     rst_i     = 1;
     data_i    = '0;
     weight_i  = '0;
     prevout_i = '0;
 
-    // Rilascio Reset
+    // Reset release
     #(CLK_PERIOD * 2);
     rst_i = 0;
     @(posedge clk_i);
 
     $display("========================================");
-    $display("   INIZIO TESTBENCH PROCESSING ELEMENT  ");
+    $display("   START PROCESSING ELEMENT TESTBENCH   ");
     $display("========================================");
 
-    // Test 1: Valori noti specifici
-    drive_and_check(8'd5,  8'd4,  8'd10); // MAC: (5 * 4) + 10 = 30
-    drive_and_check(8'd12, 8'd3,  8'd0);  // MAC: (12 * 3) + 0 = 36
-    drive_and_check(8'd255,8'd2,  8'd5);  // MAC: (255 * 2) + 5 = 515
+    // Test 1: Specific known values
+    drive_and_check(8'd5,   8'd4,   32'd10); // MAC: (5 * 4) + 10 = 30
+    drive_and_check(8'd12,  8'd3,   32'd0);  // MAC: (12 * 3) + 0 = 36
+    drive_and_check(8'd255, 8'd2,   32'd5);  // MAC: (255 * 2) + 5 = 515
 
-    // Test 2: Stimoli Casuali
+    // Test 2: Random stimuli
     repeat (10) begin
-      logic [Width-1:0] rand_d, rand_w, rand_p;
+      logic [Width-1:0]    rand_d, rand_w;
+      logic [AccWidth-1:0] rand_p;
       rand_d = $urandom_range(0, (1<<Width)-1);
       rand_w = $urandom_range(0, (1<<Width)-1);
-      rand_p = $urandom_range(0, (1<<Width)-1);
+      rand_p = $urandom_range(0, 1000);
 
       drive_and_check(rand_d, rand_w, rand_p);
     end
 
     $display("========================================");
-    $display("   TEST COMPLETATI SENZA ERRORE         ");
+    if (total_errors == 0) begin
+      $display("   TESTS COMPLETED SUCCESSFULLY (0 ERRORS) ");
+    end else begin
+      $display("   TESTBENCH FAILED WITH %0d ERRORS       ", total_errors);
+    end
     $display("========================================");
     $finish;
   end
-
-// Task automatizzata per invio stimolo e controllo risultati
-  task automatic drive_and_check(
-    input logic [Width-1:0] d,
-    input logic [Width-1:0] w,
-    input logic [Width-1:0] p
-  );
-    // Dichiarazione delle variabili locali ALL'INIZIO del task
-    logic [31:0] expected_result;
-
-    // Assegnamento ingressi e gestione timing
-    data_i    <= d;
-    weight_i  <= w;
-    prevout_i <= p;
-
-    @(posedge clk_i);
-    #1ps; // Delta delay per il campionamento sicuro delle uscite
-
-    // Calcolo del valore teorico atteso
-    expected_result = (d * w) + p;
-
-    // Display dello stato
-    $display("[TIME %0t] IN: data=%0d, weight=%0d, prevout=%0d | OUT: result=%0d (EXP: %0d), data_o=%0d",
-             $time, d, w, p, result_o, expected_result, data_o);
-
-    // Assertions di controllo
-    if (result_o !== expected_result) begin
-      $error("[ERRORE MAC] Risultato non corretto! Ottenuto: %0d, Atteso: %0d", result_o, expected_result);
-    end
-    if (data_o !== d) begin
-      $error("[ERRORE PASSTHROUGH] data_o errato! Ottenuto: %0d, Atteso: %0d", data_o, d);
-    end
-  endtask
 
 endmodule
