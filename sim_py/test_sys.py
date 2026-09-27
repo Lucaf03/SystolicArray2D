@@ -37,11 +37,17 @@ def pack_matrix(mat):
 
 def unpack_result(val):
     """
-    Unpacks a 128-bit result_o output into a list of 4 32-bit columns.
+    Unpacks a 128-bit result_o output into a list of 4 signed 32-bit columns.
     Mapping: result_o[c] corresponds to bits [c*32 +: 32].
     """
     val_int = int(val)
-    return [(val_int >> (c * 32)) & 0xFFFFFFFF for c in range(4)]
+    cols = []
+    for c in range(4):
+        raw = (val_int >> (c * 32)) & 0xFFFFFFFF
+        if raw >= 0x80000000:
+            raw -= 0x100000000
+        cols.append(np.int32(raw))
+    return cols
 
 # -----------------------------------------------------------------------------
 # Reusable Driver / Monitor Coroutine
@@ -51,14 +57,15 @@ async def execute_gemm(dut, A_pad, B_pad, M_dim=4, P_dim=4, test_title="GEMM Tes
     """
     Drives systolic array inputs, samples outputs with synchronous wavefront timing,
     and verifies the result against the NumPy golden reference model.
+    Supports both signed int8 and unsigned uint8 matrices.
     """
     dut._log.info("=" * 64)
     dut._log.info(f"START {test_title}")
     dut._log.info(f"Effective Dimensions: ({M_dim}x{A_pad.shape[1]}) x ({B_pad.shape[0]}x{P_dim})")
     dut._log.info("=" * 64)
 
-    # Golden Model calculation with NumPy
-    C_expected = A_pad.astype(np.uint32) @ B_pad.astype(np.uint32)
+    # Golden Model calculation with NumPy (signed int32)
+    C_expected = A_pad.astype(np.int32) @ B_pad.astype(np.int32)
 
     # 1. Weight Loading and Synchronous Reset
     dut.data_i.value = 0
@@ -73,7 +80,7 @@ async def execute_gemm(dut, A_pad, B_pad, M_dim=4, P_dim=4, test_title="GEMM Tes
     await RisingEdge(dut.clk_i) # 1 clock cycle to allow weight_q to latch weights
 
     # 2. Streaming Matrix A and Synchronous Sampling of C
-    C_actual = np.zeros((4, 4), dtype=np.uint32)
+    C_actual = np.zeros((4, 4), dtype=np.int32)
 
     async def stream_A():
         for i in range(4):
@@ -225,15 +232,15 @@ async def test_05_padded_3x2_by_2x4(dut):
 
 @cocotb.test()
 async def test_06_random_full_4x4(dut):
-    """Test 6: Full 4x4 Random Matrix Multiplications with values up to 100 (5 iterations)"""
+    """Test 6: Full 4x4 Signed int8 Random Matrix Multiplications with negative numbers (5 iterations)"""
     cocotb.start_soon(Clock(dut.clk_i, 10, unit="ns").start())
     rng = np.random.default_rng(42)
 
     for iteration in range(1, 6):
-        A = rng.integers(0, 100, size=(4, 4), dtype=np.uint8)
-        B = rng.integers(0, 100, size=(4, 4), dtype=np.uint8)
+        A = rng.integers(-50, 50, size=(4, 4), dtype=np.int8)
+        B = rng.integers(-50, 50, size=(4, 4), dtype=np.int8)
         await execute_gemm(dut, A, B, M_dim=4, P_dim=4, 
-                           test_title=f"TEST 6.{iteration}: Random 4x4 (Iteration {iteration})")
+                           test_title=f"TEST 6.{iteration}: Signed int8 Random 4x4 (Iteration {iteration})")
 
 @cocotb.test()
 async def test_07_random_padded_shapes(dut):

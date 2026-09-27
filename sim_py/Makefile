@@ -13,6 +13,25 @@ clean:
 	@echo "Cleanup completed."
 else
 
+# If local .venv exists but is not yet in PATH, re-execute make with updated PATH
+# This ensures that $(shell ...) calls inside cocotb's Makefile.sim find cocotb-config and the venv's python
+ifneq ($(wildcard $(VENV_BIN)/cocotb-config),)
+    ifeq ($(findstring $(VENV_BIN),$(PATH)),)
+        ifeq ($(MAKECMDGOALS),)
+            .PHONY: __default_run
+            __default_run:
+		@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(firstword $(MAKEFILE_LIST))
+            all: __default_run
+        else
+            %:
+		@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(firstword $(MAKEFILE_LIST)) $@
+        endif
+        _RE_EXEC := 1
+    endif
+endif
+
+ifndef _RE_EXEC
+
 VERILOG_SOURCES += $(PWD)/../RTL/pe.sv
 VERILOG_SOURCES += $(PWD)/../RTL/sys.sv
 
@@ -22,15 +41,14 @@ MODULE = test_sys
 COMPILE_ARGS += -sv
 SIM_ARGS += -t 1ps -voptargs="+acc"
 
-# Auto-detect local virtualenv if present, otherwise use environment's cocotb-config
-ifneq ($(wildcard $(VENV_BIN)/cocotb-config),)
-    export PATH := $(VENV_BIN):$(PATH)
-    COCOTB_CONFIG ?= $(VENV_BIN)/cocotb-config
-else
-    COCOTB_CONFIG ?= cocotb-config
+COCOTB_CONFIG ?= cocotb-config
+COCOTB_MAKEFILES := $(shell $(COCOTB_CONFIG) --makefiles 2>/dev/null)
+
+ifeq ($(COCOTB_MAKEFILES),)
+$(error cocotb is not installed or not in PATH! Please run './run.sh' (which automatically sets up the environment) or activate your virtual environment)
 endif
 
-include $(shell $(COCOTB_CONFIG) --makefiles)/Makefile.sim
+include $(COCOTB_MAKEFILES)/Makefile.sim
 
 # Additional cleanup for simulator logs, waveforms, reports, and caches
 clean::
@@ -38,4 +56,5 @@ clean::
 	rm -rf sim_build transcript results.xml modelsim.ini *.wlf *.vcd *.log __pycache__ .pytest_cache
 	@echo "Cleanup completed."
 
+endif
 endif
