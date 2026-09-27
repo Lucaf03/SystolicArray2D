@@ -1,6 +1,6 @@
 # 2D Weight-Stationary Systolic Array for Hardware GEMM Acceleration
 
-A high-performance, fully synthesizable 2D Systolic Array designed in SystemVerilog for accelerating **General Matrix Multiplication (GEMM)** operations ($C = A \times B$). The design features an $N \times N$ ($4 \times 4$) grid with parameterized data widths, weight-stationary dataflow, an integrated triangular input-skewing network, and a comprehensive dual verification environment utilizing both **SystemVerilog** and **Python / Cocotb**.
+A high-performance, fully synthesizable 2D Systolic Array designed in SystemVerilog for accelerating **General Matrix Multiplication (GEMM)** operations ($C = A \times B$) with signed **INT8** operands and **INT32** accumulation. The design features an $N \times N$ ($4 \times 4$) grid with parameterized data widths, weight-stationary dataflow, an integrated triangular input-skewing network, and a comprehensive dual verification environment utilizing both **SystemVerilog** and **Python / Cocotb**.
 
 ---
 
@@ -75,33 +75,33 @@ $$y = y_{\text{prev}} + x \times w$$
 #### Parameters
 | Parameter | Default Value | Description |
 |---|---|---|
-| `Width` | `8` | Data bit-width for input activation $x$ and weight $w$ |
-| `AccWidth` | `32` | Extended accumulator bit-width to prevent arithmetic overflow |
+| `Width` | `8` | Data bit-width for signed input activation $x$ and weight $w$ (INT8, range $[-128, 127]$) |
+| `AccWidth` | `32` | Extended signed accumulator bit-width to prevent arithmetic overflow (INT32) |
 
 #### PE Block Diagram
 
 ```mermaid
 flowchart TD
-    subgraph Inputs ["Inputs"]
-        DATA_IN["data_i (Width)"]
-        WEIGHT_IN["weight_i (Width)"]
-        PREV_IN["prevout_i (AccWidth)"]
+    subgraph Inputs ["Inputs (Signed)"]
+        DATA_IN["data_i (Width, Signed)"]
+        WEIGHT_IN["weight_i (Width, Signed)"]
+        PREV_IN["prevout_i (AccWidth, Signed)"]
     end
 
-    subgraph Internal_Registers ["Registered Pipeline Stages"]
-        REG_W["weight_q (Stationary Register)"]
-        REG_X["x_q (Horizontal Delay)"]
-        REG_Y["y_q (Vertical Accumulator)"]
+    subgraph Internal_Registers ["Registered Pipeline Stages (Signed)"]
+        REG_W["weight_q (Stationary Register, Signed)"]
+        REG_X["x_q (Horizontal Delay, Signed)"]
+        REG_Y["y_q (Vertical Accumulator, Signed)"]
     end
 
-    subgraph MAC_Unit ["Combinational Arithmetic"]
-        MULT["Multiplier: AccWidth'(data_i) * AccWidth'(weight_q)"]
-        ADDER["Adder: prevout_i + Product"]
+    subgraph MAC_Unit ["Combinational Arithmetic (Signed INT8/INT32)"]
+        MULT["Signed Multiplier: mul_res = data_i * weight_q (2*Width)"]
+        ADDER["Signed Adder: prevout_i + AccWidth'(mul_res)"]
     end
 
-    subgraph Outputs ["Outputs"]
-        DATA_OUT["data_o = x_q"]
-        RESULT_OUT["result_o = y_q"]
+    subgraph Outputs ["Outputs (Signed)"]
+        DATA_OUT["data_o = x_q (Signed)"]
+        RESULT_OUT["result_o = y_q (Signed)"]
     end
 
     WEIGHT_IN -->|"Latching on clk_i"| REG_W
@@ -118,15 +118,17 @@ flowchart TD
 ```
 
 #### Microarchitecture Details
-- **Weight Register (`weight_q`)**: Latches `weight_i` synchronously on reset release. In stationary operation, this value remains unchanged during the inference stream.
-- **Horizontal Forwarding Register (`x_q`)**: Delays `data_i` by 1 clock cycle before forwarding to the right neighbour (`data_o`).
-- **Vertical Accumulator Register (`y_q`)**: Computes `y_int = prevout_i + (data_i * weight_q)` combinationally and latches it into `y_q` on each clock edge, outputting to the lower PE (`result_o`).
+- **Signed Arithmetic (INT8 / INT32)**: All PE data ports (`data_i`, `weight_i`, `prevout_i`, `result_o`, `data_o`) and internal registers are declared with SystemVerilog `signed` qualifiers, fully supporting two's-complement arithmetic with negative weights and activations.
+- **Weight Register (`weight_q`)**: Latches signed `weight_i` synchronously on reset release. In stationary operation, this value remains static during the inference stream.
+- **Horizontal Forwarding Register (`x_q`)**: Delays signed `data_i` by 1 clock cycle before forwarding to the right neighbour (`data_o`).
+- **Combinational Multiplier (`mul_res`)**: Computes signed multiplication `mul_res = data_i * weight_q`, generating a full `2*Width` (16-bit) signed product.
+- **Signed Accumulator Register (`y_q`)**: Sign-extends `mul_res` to `AccWidth` bits (`AccWidth'(mul_res)`), accumulates it with incoming partial sum `prevout_i` (`y_int = prevout_i + AccWidth'(mul_res)`), and latches into `y_q` on each clock edge, outputting to the lower PE (`result_o`).
 
 ---
 
 ### 2D Systolic Array Grid (`sys.sv`)
 
-The top-level module instantiates a $4 \times 4$ mesh of PEs (`Matrix_N = 4`), integrating the triangular input skewing registers on the left and routing partial sums downward.
+The top-level module instantiates a $4 \times 4$ mesh of PEs (`Matrix_N = 4`), integrating the triangular input skewing registers on the left and routing partial sums downward. All boundary I/O ports and internal interconnect busses (`sys_data`, `pe_data`, `pe_result`) carry `signed` data types.
 
 ```mermaid
 flowchart TD
@@ -208,6 +210,8 @@ In a matrix multiplication $C = A \times B$, entry $C_{i, c} = \sum_{k=0}^{N-1} 
   - Row 1: 1 flip-flop delay stage.
   - Row 2: 2 cascaded flip-flop delay stages.
   - Row 3: 3 cascaded flip-flop delay stages.
+- Operands are converted to signed types via `$signed(ff_skew[i][i])` when feeding row 0..3 of the PE array.
+- PE boundary inputs are routed using ternary multiplexers (`data_in_pe = !c ? sys_data[r] : pe_data[r][c-1]` and `prevout_in_pe = !r ? prevout_i[c] : pe_result[r-1][c]`).
 
 ---
 
@@ -269,9 +273,10 @@ flowchart LR
 ```
 
 #### Why Cocotb?
-- **Effortless Golden Model Verification**: Matrix multiplication reference results are calculated instantaneously with NumPy (`C_expected = A @ B`).
+- **Effortless Golden Model Verification**: Matrix multiplication reference results are calculated instantaneously with NumPy (`C_expected = A @ B`). Natively supports signed INT8 arithmetic with 32-bit signed accumulation (`C_expected = A_pad.astype(np.int32) @ B_pad.astype(np.int32)`).
 - **Concurrent Coroutines**: Uses Python `async/await` syntax to run the input streaming process (`stream_A`) concurrently with the output sampling process (`sample_C`).
 - **Dynamic Assertions**: Full numerical array assertions (`np.array_equal`) with clean matrix formatting in failure diagnostics.
+- **Signed & Negative Value Handling**: Unpacks 128-bit outputs into signed 32-bit integers, verifying two's-complement arithmetic fidelity.
 
 ---
 
@@ -307,7 +312,7 @@ For native HDL verification without Python dependencies:
 | **Test 3** | Rectangular Padded | $(2 \times 3) \times (3 \times 4)$ | $M=2, K=3, P=4$ with zero-padding | **PASS** | **PASS** |
 | **Test 4** | Reduced Square | $(2 \times 2) \times (2 \times 2)$ | Small $2 \times 2$ submatrix embedded in $4 \times 4$ | **PASS** | **PASS** |
 | **Test 5** | Rectangular Padded | $(3 \times 2) \times (2 \times 4)$ | Asymmetric inner dimension $K=2$ with zero-padding | **PASS** | **PASS** |
-| **Test 6** | Random Matrices | $(4 \times 4) \times (4 \times 4)$ | Multi-iteration random matrices with values $\in [0, 100]$ | **PASS** | **PASS** |
+| **Test 6** | Random Signed INT8 | $(4 \times 4) \times (4 \times 4)$ | Multi-iteration full signed INT8 random GEMM with negative values in $[-50, 50)$ | **PASS** | **PASS** |
 | **Test 7** | Random Shapes | Multiple | $1 \times 4$, $4 \times 1$, $3 \times 3$, $1 \times 2$ padded shapes | **PASS** | **PASS** |
 
 #### Summary of Cocotb Regression Output:
@@ -335,8 +340,8 @@ For native HDL verification without Python dependencies:
 SystolicArray2D/
 ├── README.md                      # Project documentation and architectural overview
 ├── RTL/                           # Synthesizable SystemVerilog RTL source files
-│   ├── pe.sv                      # Processing Element module (Multiply-Accumulate)
-│   └── sys.sv                     # 2D Systolic Array top module (Skew network + Grid)
+│   ├── pe.sv                      # Processing Element module (Signed INT8 Multiply-Accumulate)
+│   └── sys.sv                     # 2D Systolic Array top module (Signed INT8 Grid + Skew Network)
 ├── sim/                           # Native SystemVerilog simulation environment
 │   ├── run.do                     # QuestaSim TCL script for PE testbench
 │   ├── run_sys.do                 # QuestaSim TCL script for 2D Systolic Array testbench
@@ -344,9 +349,9 @@ SystolicArray2D/
 │   └── tb_sys.sv                  # Testbench for 2D Systolic Array
 └── sim_py/                        # Python / Cocotb cosimulation environment
     ├── Makefile                   # Cocotb build configuration for QuestaSim/ModelSim
-    ├── run.sh                     # Automated runner script
-    ├── test_sys.py                # Asynchronous Cocotb GEMM test suite
-    └── Simulation_results.MD      # Detailed simulation and verification report
+    ├── run.sh                     # Automated runner script (auto-creates/configures .venv)
+    ├── requirements.txt           # Python dependencies (cocotb, numpy, pytest)
+    └── test_sys.py                # Asynchronous Cocotb GEMM test suite (Signed INT8 support)
 ```
 
 ---
@@ -355,13 +360,14 @@ SystolicArray2D/
 
 ### Prerequisites
 - **HDL Simulator**: Siemens QuestaSim or ModelSim (installed and available in `PATH`).
-- **Python**: Version 3.10+ with `cocotb` and `numpy`.
+- **Python**: Version 3.10+ (with packages listed in `sim_py/requirements.txt`).
 
 ---
 
 ### Running Cocotb Python Tests (Recommended)
 
 #### Option A: Using the Automated Runner Script
+The script automatically configures a local Python virtual environment (`.venv`) and installs necessary packages if not already present:
 ```bash
 cd sim_py
 ./run.sh
