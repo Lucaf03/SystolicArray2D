@@ -4,8 +4,10 @@ module pe #(
 ) (
   input  logic                        clk_i, 
   input  logic                        rst_i,
+  input  logic                        load_weight_i,
   input  logic signed [Width-1:0]     data_i,
   input  logic signed [Width-1:0]     weight_i,
+  input  logic signed [Width-1:0]     weight_o,
   input  logic signed [AccWidth-1:0]  prevout_i,
   output logic signed [AccWidth-1:0]  result_o,
   output logic signed [Width-1:0]     data_o
@@ -19,6 +21,7 @@ logic signed [2*Width-1:0]  mul_res;
 
 assign result_o = y_q;
 assign data_o   = x_q;
+assign weight_o = weight_q;
 
 // Output register y
 always_ff @(posedge clk_i or posedge rst_i) begin 
@@ -42,7 +45,7 @@ end
 always_ff @(posedge clk_i or posedge rst_i) begin
   if (rst_i == 1'b1) begin 
     weight_q <= '0;
-  end else begin
+  end else if (load_weight_i == 1'b1) begin
     weight_q <= weight_i;
   end
 end
