@@ -7,7 +7,7 @@ module pe #(
   input  logic                        load_weight_i,
   input  logic signed [Width-1:0]     data_i,
   input  logic signed [Width-1:0]     weight_i,
-  input  logic signed [Width-1:0]     weight_o,
+  output  logic signed [Width-1:0]    weight_o,
   input  logic signed [AccWidth-1:0]  prevout_i,
   output logic signed [AccWidth-1:0]  result_o,
   output logic signed [Width-1:0]     data_o

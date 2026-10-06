@@ -35,10 +35,10 @@ ifndef _RE_EXEC
 VERILOG_SOURCES += $(PWD)/../RTL/pe.sv
 VERILOG_SOURCES += $(PWD)/../RTL/sys.sv
 
-TOPLEVEL = sys
-MODULE = test_sys
+TOPLEVEL ?= sys
+MODULE ?= test_sys
 
-COMPILE_ARGS += -sv
+COMPILE_ARGS += -sv -suppress 2997
 SIM_ARGS += -t 1ps -voptargs="+acc"
 
 COCOTB_CONFIG ?= cocotb-config
